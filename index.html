@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Подход — дневник зала</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* Layout: one mobile column. Ink-black for actions and the live timer band; lime marks only "идёт сейчас". Grey neutrals. */
+:root{
+  --bg:#F3F4F6; --surface:#FFFFFF; --ink:#0B0B0C; --muted:#6E7179; --line:#E4E5E9; --soft:#EDEEF1;
+  --live:#D4FF3D; --live-ink:#0B0B0C; --danger:#E5482D;
+  --font:"Onest", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --r:18px; --r-s:12px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0B0B0D; --surface:#17181B; --ink:#F3F4F6; --muted:#8E929B; --line:#26282D; --soft:#202226;
+    --live:#D4FF3D; --live-ink:#0B0B0C; --danger:#FF6A4F; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0B0B0D; --surface:#17181B; --ink:#F3F4F6; --muted:#8E929B; --line:#26282D; --soft:#202226;
+  --live:#D4FF3D; --live-ink:#0B0B0C; --danger:#FF6A4F; color-scheme: dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font:400 15px/1.4 var(--font);-webkit-font-smoothing:antialiased}
+button,input{font:inherit;color:inherit}
+.num{font-variant-numeric:tabular-nums}
+.wrap{max-width:480px;margin:0 auto;padding:20px 16px 56px;display:flex;flex-direction:column;gap:20px}
+h1{font:800 28px/1 var(--font);letter-spacing:-.03em;margin:0}
+h2{font:600 13px/1 var(--font);color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:0}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.sync{font-size:12px;color:var(--muted);white-space:nowrap}
+
+.btn{border:0;border-radius:999px;padding:13px 20px;font-weight:600;cursor:pointer;background:var(--ink);color:var(--bg);white-space:nowrap}
+.btn.sm{padding:9px 14px;font-size:14px}
+.ghost{border:1.5px solid var(--line);background:transparent;border-radius:999px;padding:12px 18px;font-weight:600;cursor:pointer}
+.ghost.sm{padding:8px 13px;font-size:14px}
+.link{background:none;border:0;color:var(--muted);text-decoration:underline;text-underline-offset:3px;cursor:pointer;padding:6px}
+.danger{color:var(--danger)}
+.ghost[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+:is(.btn,.ghost,.link,.seg button,.tile,.chk,.icon):focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.seg{display:flex;background:var(--surface);border-radius:999px;padding:4px;gap:4px}
+.seg button{flex:1;border:0;background:transparent;border-radius:999px;padding:10px 6px;font-weight:600;cursor:pointer;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+
+/* summary */
+.sum{display:grid;grid-template-columns:repeat(3,1fr);background:var(--surface);border-radius:var(--r);padding:16px}
+.sum>div+div{border-left:1px solid var(--line);padding-left:14px}
+.sum .v{font:800 24px/1.1 var(--font);letter-spacing:-.02em}
+.sum .l{font-size:12px;color:var(--muted);margin-top:4px}
+.week{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.day{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.pill{width:100%;height:44px;border-radius:999px;background:var(--surface);display:grid;place-items:center;font-size:11px;font-weight:700;color:var(--bg)}
+.pill.on{background:var(--ink)}
+.day.today{color:var(--ink);font-weight:700}
+
+/* templates */
+.list{background:var(--surface);border-radius:var(--r);overflow:hidden}
+.tile{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;padding:14px 16px;width:100%;text-align:left;background:none;border:0;cursor:pointer}
+.tile+.tile{border-top:1px solid var(--line)}
+.tile .n{font-weight:700;font-size:17px}
+.tile .d{font-size:13px;color:var(--muted);margin-top:3px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.empty{background:var(--surface);border-radius:var(--r);padding:20px 18px;display:flex;flex-direction:column;gap:10px}
+.empty h3{margin:0;font:800 19px/1.25 var(--font);text-wrap:balance}
+.empty p{margin:0;color:var(--muted)}
+.mini{font-size:13px;color:var(--muted)}
+.resume{display:flex;align-items:center;gap:12px;background:var(--ink);color:var(--bg);border-radius:var(--r);padding:14px 16px;border:0;width:100%;text-align:left;cursor:pointer}
+.resume .dot{width:10px;height:10px;border-radius:50%;background:var(--live);flex:none;animation:pulse 1.6s infinite}
+@keyframes pulse{50%{opacity:.35}}
+@media (prefers-reduced-motion: reduce){.resume .dot{animation:none}}
+.resume b{flex:1}
+
+/* chart */
+.chart{background:var(--surface);border-radius:var(--r);padding:16px 14px 10px}
+.chart .hd{display:flex;flex-wrap:wrap;gap:4px 10px;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.chart .hd b{font-size:15px}
+.chart svg{width:100%;height:auto;display:block;overflow:visible}
+.chart text{fill:var(--muted);font:500 10px var(--font)}
+.chart .grid{stroke:var(--line);stroke-width:1}
+.chart .bar{fill:var(--ink)}
+.chart .zero{fill:var(--line)}
+.chart .lbl{fill:var(--ink);font-weight:700}
+.mgroup{display:flex;justify-content:space-between;align-items:baseline;margin:8px 2px 8px}
+.mgroup b{font-size:17px}
+.mgroup span{font-size:13px;color:var(--muted)}
+
+/* session */
+.band{position:sticky;top:0;z-index:5;background:#0B0B0C;color:#F3F4F6;padding:14px 16px 16px;margin:-20px -16px 0;display:flex;flex-direction:column;gap:6px}
+.band .row{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.band .name{font-weight:600;font-size:15px;color:#B9BCC4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.clock{font:800 56px/1 var(--font);letter-spacing:-.04em}
+.rest{display:inline-flex;align-items:center;gap:6px;background:var(--live);color:var(--live-ink);border-radius:999px;padding:4px 10px;font-weight:700;font-size:13px}
+.band .btn{background:#F3F4F6;color:#0B0B0C}
+.band .x{background:none;border:0;color:#B9BCC4;cursor:pointer;padding:6px;font-size:14px}
+.ex{background:var(--surface);border-radius:var(--r);padding:14px 14px 12px;display:flex;flex-direction:column;gap:8px}
+.ex .h{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.ex .h b{font-size:17px}
+.prev{font-size:12px;color:var(--muted)}
+.sets{display:grid;grid-template-columns:28px 1fr 1fr 48px;gap:6px 8px;align-items:center}
+.sets .hdr{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.sets .no{font-weight:700;color:var(--muted);text-align:center}
+.sets input{width:100%;min-width:0;border:1.5px solid var(--line);background:var(--bg);border-radius:var(--r-s);padding:11px 10px;font-weight:600;font-size:17px;outline:none;text-align:center}
+.sets input:focus{border-color:var(--ink)}
+.sets input::placeholder{color:var(--muted);font-weight:500;opacity:.7}
+.chk{width:48px;height:46px;border-radius:var(--r-s);border:1.5px solid var(--line);background:transparent;cursor:pointer;display:grid;place-items:center}
+.chk svg{width:20px;height:20px;stroke:var(--muted);fill:none;stroke-width:2.5}
+.chk.on{background:var(--ink);border-color:var(--ink)}
+.chk.on svg{stroke:var(--bg)}
+.sets .done input{background:var(--soft);border-color:transparent}
+.ex .ft{display:flex;gap:8px;justify-content:space-between;align-items:center}
+.icon{background:none;border:0;cursor:pointer;color:var(--muted);padding:6px;font-size:13px}
+.addex{display:flex;gap:8px}
+.addex input{flex:1;min-width:0;border:1.5px solid var(--line);background:var(--surface);border-radius:999px;padding:12px 16px;outline:none}
+.addex input:focus{border-color:var(--ink)}
+
+/* sheet */
+.scrim{position:fixed;inset:0;background:#0009;display:none;align-items:flex-end;justify-content:center;z-index:20}
+.scrim.on{display:flex}
+.sheet{background:var(--surface);width:100%;max-width:480px;border-radius:24px 24px 0 0;padding:10px 18px 24px;max-height:92%;overflow:auto;display:flex;flex-direction:column;gap:14px}
+.grab{width:40px;height:4px;border-radius:4px;background:var(--line);margin:0 auto 4px}
+.sheet h3{margin:0;font:800 22px/1.2 var(--font);text-wrap:balance}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label,.flab{font-size:13px;color:var(--muted)}
+.field input{border:1.5px solid var(--line);background:var(--bg);border-radius:12px;padding:12px;outline:none}
+.field input:focus{border-color:var(--ink)}
+.exl{display:flex;flex-direction:column;gap:6px}
+.exi{display:flex;gap:6px;align-items:center;background:var(--bg);border-radius:12px;padding:6px 6px 6px 12px}
+.exi span{flex:1;font-weight:500;min-width:0}
+.memo{display:block;font-size:12px;font-weight:500;color:var(--muted);margin-top:2px}
+.memo.pr{color:var(--ink)}
+.prow{display:inline-flex;align-items:center;gap:4px;background:var(--soft);border-radius:6px;padding:1px 6px;font-size:11px;font-weight:700;margin-left:6px;vertical-align:2px}
+.actions{display:flex;flex-direction:column;gap:8px}
+.stats3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stats3>div{background:var(--bg);border-radius:12px;padding:12px}
+.stats3 .v{font:800 20px/1.1 var(--font)}
+.stats3 .l{font-size:12px;color:var(--muted);margin-top:4px}
+.log{display:flex;flex-direction:column;gap:10px}
+.log b{display:block;margin-bottom:2px}
+.log span{color:var(--muted);font-size:14px}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:12px 18px;border-radius:999px;font-weight:500;font-size:14px;z-index:30;display:none;max-width:calc(100% - 32px);text-align:center}
+.toast.on{display:block}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<div class="scrim" id="scrim"><div class="sheet" id="sheet" role="dialog" aria-modal="true"></div></div>
+<div class="toast" id="toast" role="status"></div>
+<script>
+(() => {
+const $ = s => document.querySelector(s);
+const DAY = 864e5;
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const plural = (n, a, b, c) => { n = Math.abs(n) % 100; const m = n % 10; if (n>10&&n<20) return c; if (m>1&&m<5) return b; if (m===1) return a; return c; };
+const uid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+const dur = ms => { const m = Math.max(0, Math.round(ms/6e4)); const h = Math.floor(m/60); return h ? `${h} ч ${m%60} мин` : `${m} мин`; };
+const clock = ms => { const s = Math.max(0, Math.floor(ms/1000)); const h = Math.floor(s/3600), m = Math.floor(s%3600/60), x = s%60; return (h ? h + ':' + String(m).padStart(2,'0') : m) + ':' + String(x).padStart(2,'0'); };
+const dayKey = t => { const d = new Date(t); return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate(); };
+const startOfDay = t => { const d = new Date(t); d.setHours(0,0,0,0); return d.getTime(); };
+const ago = t => { const d = Math.round((startOfDay(Date.now()) - startOfDay(t)) / DAY); return d === 0 ? 'сегодня' : d === 1 ? 'вчера' : `${d} ${plural(d,'день','дня','дней')} назад`; };
+const fmtW = n => (Math.round(n*10)/10).toLocaleString('ru-RU');
+const CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+let docs = [];               // all docs: {id, kind:'template'|'session', ...}
+let view = 'home';           // home | history | session
+let active = null;           // local working copy of the running session
+let editing = null;          // a past session being filled in or corrected
+const W = () => view === 'edit' ? editing : active;
+let backend = null;
+
+/* ---------- storage ---------- */
+const LS = 'podhod-docs-v1';
+const lsRead = () => { try { return JSON.parse(localStorage.getItem(LS) || '[]'); } catch(e){ return []; } };
+const lsWrite = () => { try { localStorage.setItem(LS, JSON.stringify(docs)); } catch(e){} };
+function upsertLocal(d){ const i = docs.findIndex(x=>x.id===d.id); if (i>=0) docs[i] = d; else docs.push(d); }
+
+const pending = new Map(), busy = new Set();
+async function put(d){
+  upsertLocal(d);
+  if (!backend.remote){ lsWrite(); return; }
+  pending.set(d.id, d);
+  if (busy.has(d.id)) return;
+  busy.add(d.id);
+  while (pending.has(d.id)){
+    const cur = pending.get(d.id); pending.delete(d.id);
+    const { id, ...body } = cur;
+    try { await backend.col.doc(id).set(JSON.parse(JSON.stringify(body))); }
+    catch(e){ toast(e && e.code === 'quota_exceeded' ? 'Место закончилось: удали старые тренировки' : 'Не сохранилось, проверь связь'); }
+  }
+  busy.delete(d.id);
+}
+async function del(id){
+  docs = docs.filter(x=>x.id!==id);
+  if (!backend.remote){ lsWrite(); return; }
+  try { await backend.col.doc(id).delete(); } catch(e){ toast('Не удалилось, попробуй ещё раз'); }
+}
+let saveT = null;
+function saveActiveSoon(){ if (view === 'edit') return; clearTimeout(saveT); saveT = setTimeout(()=> active && put(structuredClone(active)), 700); }
+function saveActiveNow(){ if (view === 'edit') return; clearTimeout(saveT); if (active) return put(structuredClone(active)); }
+
+async function init(){
+  backend = { remote:false }; docs = lsRead(); pickActive(); render();
+  if (!window.claude || !window.claude.use){ setSync('только на этом устройстве'); return; }
+  let db = null, user = null;
+  try { [db, user] = await Promise.all([claude.use('db'), claude.use('user')]); } catch(e){}
+  const id = user ? await user.id().catch(()=>null) : null;
+  if (!db || !id){ setSync('только на этом устройстве'); return; }
+  backend = { remote:true, col: db.collection('data/users/' + id) };
+  docs = []; render();
+  setSync('загрузка…');
+  const timer = setTimeout(()=> setSync('нет связи, данные могут быть старыми'), 10000);
+  backend.col.onSnapshot(snap => {
+    docs = snap.docs.filter(d=>d.exists).map(d => ({ id:d.id, ...d.data() }));
+    if (!snap.metadata.fromCache){ clearTimeout(timer); setSync('синхронизировано'); }
+    if (active){ const i = docs.findIndex(x=>x.id===active.id); if (i>=0) docs[i] = active; } // local copy wins while typing
+    else pickActive();
+    if (!((view === 'session' || view === 'edit') && document.activeElement && document.activeElement.tagName === 'INPUT')) render();
+  }, () => { clearTimeout(timer); setSync('не удалось загрузить'); });
+}
+function setSync(t){ const e = $('#sync'); if (e) e.textContent = t; syncText = t; }
+let syncText = '';
+function pickActive(){
+  const run = docs.filter(d=>d.kind==='session' && !d.endedAt).sort((a,b)=>b.startedAt-a.startedAt)[0];
+  active = run ? structuredClone(run) : null;
+}
+
+/* ---------- derived ---------- */
+const templates = () => docs.filter(d=>d.kind==='template').sort((a,b)=>(a.order||0)-(b.order||0));
+const sessions = () => docs.filter(d=>d.kind==='session' && d.endedAt).sort((a,b)=>b.startedAt-a.startedAt);
+const priorSessions = () => { const ref = view === 'edit' && editing ? editing : null; return ref ? sessions().filter(s => s.id !== ref.id && s.startedAt < ref.startedAt) : sessions(); };
+const dayLabel = t => { const d = Math.round((startOfDay(Date.now()) - startOfDay(t)) / DAY); return d === 0 ? 'Сегодня' : d === 1 ? 'Вчера' : new Date(t).toLocaleDateString('ru-RU',{day:'numeric',month:'long'}); };
+function lastFor(name){
+  const s = priorSessions().find(s => s.exercises.some(e => e.name.toLowerCase() === name.toLowerCase() && e.sets.some(x=>x.done)));
+  if (!s) return null;
+  return s.exercises.find(e => e.name.toLowerCase() === name.toLowerCase()).sets.filter(x=>x.done);
+}
+function lastInfo(name){
+  const k = name.toLowerCase();
+  const s = priorSessions().find(s => s.exercises.some(e => e.name.toLowerCase() === k && e.sets.some(x=>x.done)));
+  return s ? { sets: s.exercises.find(e => e.name.toLowerCase() === k).sets.filter(x=>x.done), at: s.startedAt } : null;
+}
+function bestFor(name){
+  const k = name.toLowerCase(); let best = null;
+  priorSessions().forEach(s => s.exercises.forEach(e => { if (e.name.toLowerCase() !== k) return;
+    e.sets.forEach(x => { if (!x.done || !(+x.w)) return; if (!best || +x.w > +best.w || (+x.w === +best.w && +x.r > +best.r)) best = { w:x.w, r:x.r, at:s.startedAt }; }); }));
+  return best;
+}
+const shortDate = t => new Date(t).toLocaleDateString('ru-RU',{day:'numeric',month:'short'}).replace('.','');
+const setsText = sets => sets.map(x => (x.w ? fmtW(+x.w) + '×' : '') + (x.r || '—')).join(', ');
+const tonnage = s => s.exercises.reduce((a,e)=>a+e.sets.filter(x=>x.done).reduce((b,x)=>b+(+x.w||0)*(+x.r||0),0),0);
+const doneSets = s => s.exercises.reduce((a,e)=>a+e.sets.filter(x=>x.done).length,0);
+
+/* ---------- render ---------- */
+function render(){
+  const app = $('#app');
+  if (view === 'session' && active) { app.innerHTML = sessionView(); bindSession(); tick(); return; }
+  if (view === 'edit' && editing) { app.innerHTML = sessionView(); bindSession(); return; }
+  if (view === 'edit') view = 'history';
+  if (view === 'session') view = 'home';
+  const tabs = `<div class="seg" role="group" aria-label="Раздел"><button data-view="home" aria-pressed="${view==='home'}">Тренировки</button><button data-view="history" aria-pressed="${view==='history'}">История</button></div>`;
+  app.innerHTML = `<div class="top"><h1>Подход</h1><span class="sync" id="sync">${esc(syncText)}</span></div>${tabs}` + (view === 'history' ? historyView() : homeView());
+}
+
+function homeView(){
+  const ss = sessions(), now = Date.now();
+  const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0);
+  const inMonth = ss.filter(s=>s.startedAt >= monthStart.getTime());
+  const mins = inMonth.reduce((a,s)=>a+(s.endedAt-s.startedAt),0);
+  const avg = inMonth.length ? mins / inMonth.length : 0;
+  const days = new Set(ss.map(s=>dayKey(s.startedAt)));
+  // Monday-based current week
+  const t0 = startOfDay(now); const dow = (new Date(t0).getDay()+6)%7; const mon = t0 - dow*DAY;
+  const names = ['пн','вт','ср','чт','пт','сб','вс'];
+  const week = names.map((n,i)=>{ const t = mon + i*DAY; const on = days.has(dayKey(t)); return `<div class="day ${t===t0?'today':''}"><div class="pill ${on?'on':''}">${on?'✓':''}</div>${n}</div>`; }).join('');
+  const ts = templates();
+  let h = '';
+  if (active) h += `<button class="resume" data-resume><span class="dot"></span><b>Идёт: ${esc(active.name)}</b><span class="num" id="resumeClock">${clock(now-active.startedAt)}</span></button>`;
+  h += `<div class="sum"><div><div class="v num">${inMonth.length}</div><div class="l">${plural(inMonth.length,'тренировка','тренировки','тренировок')} в этом месяце</div></div>
+    <div><div class="v num">${Math.floor(mins/36e5)}<small style="font-size:15px"> ч</small> ${Math.round(mins/6e4)%60}<small style="font-size:15px"> м</small></div><div class="l">в зале за месяц</div></div>
+    <div><div class="v num">${Math.round(avg/6e4)}<small style="font-size:15px"> мин</small></div><div class="l">в среднем</div></div></div>`;
+  h += `<div class="week">${week}</div>`;
+  h += `<div style="display:flex;justify-content:space-between;align-items:center"><h2>Мои тренировки</h2><button class="ghost sm" data-newtpl>+ Новая</button></div>`;
+  if (!ts.length){
+    h += `<div class="empty"><h3>Создай первую тренировку</h3><p>Например, «Ноги» или «Верх»: название и список упражнений. В зале выбираешь её и записываешь подходы, а таймер считает время.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-newtpl>Создать</button><button class="ghost" data-demo>Добавить 3 примера</button></div></div>`;
+  } else {
+    h += `<div class="list">${ts.map(t=>{ const last = ss.find(s=>s.templateId===t.id);
+      return `<button class="tile" data-tpl="${t.id}"><div><div class="n">${esc(t.name)}</div><div class="d">${t.exercises.length ? esc(t.exercises.map(e=>e.name).join(' · ')) : 'Пока без упражнений'}</div>
+      <div class="d">${last ? 'Была ' + ago(last.startedAt) : 'Ещё не делала'}</div></div><span class="btn sm">Начать</span></button>`; }).join('')}</div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap"><button class="link" data-free>Начать без шаблона</button><button class="link" data-past>Записать прошедшую</button></div>`;
+  }
+  return h;
+}
+
+function historyView(){
+  const ss = sessions();
+  let h = chart(ss) + `<button class="ghost" data-past>+ Добавить прошедшую тренировку</button>`;
+  if (!ss.length) return h + `<div class="empty"><h3>Здесь появятся тренировки</h3><p>Заверши первую тренировку, и она попадёт в историю и на график.</p></div>`;
+  const groups = {};
+  ss.forEach(s => { const d = new Date(s.startedAt); const k = d.getFullYear()*12 + d.getMonth(); (groups[k] = groups[k] || []).push(s); });
+  Object.keys(groups).sort((a,b)=>b-a).forEach(k => {
+    const list = groups[k]; const d = new Date(Math.floor(k/12), k%12, 1);
+    const total = list.reduce((a,s)=>a+(s.endedAt-s.startedAt),0);
+    const title = d.toLocaleDateString('ru-RU',{month:'long', year:'numeric'}).replace(' г.','');
+    h += `<section><div class="mgroup"><b>${title[0].toUpperCase()+title.slice(1)}</b><span>${list.length} ${plural(list.length,'тренировка','тренировки','тренировок')} · ${dur(total)}</span></div>
+      <div class="list">${list.map(s=>`<button class="tile" data-sess="${s.id}"><div><div class="n">${esc(s.name)}</div>
+        <div class="d">${new Date(s.startedAt).toLocaleDateString('ru-RU',{weekday:'short', day:'numeric', month:'short'})}, ${new Date(s.startedAt).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})} · ${doneSets(s)} ${plural(doneSets(s),'подход','подхода','подходов')}</div></div>
+        <span class="num" style="font-weight:700">${dur(s.endedAt-s.startedAt)}</span></button>`).join('')}</div></section>`;
+  });
+  return h;
+}
+
+function chart(ss){
+  const N = 30, t0 = startOfDay(Date.now()), from = t0 - (N-1)*DAY;
+  const per = Array(N).fill(0);
+  ss.forEach(s => { const i = Math.round((startOfDay(s.startedAt) - from)/DAY); if (i>=0 && i<N) per[i] += (s.endedAt - s.startedAt)/6e4; });
+  const visits = per.filter(x=>x>0).length;
+  const total = per.reduce((a,b)=>a+b,0);
+  const top = Math.max(60, Math.ceil(Math.max(...per)/30)*30);
+  const W = 340, H = 140, padL = 26, padB = 18, cw = (W-padL)/N, bw = Math.max(4, cw*0.62);
+  const y = v => (H-padB) - v/top*(H-padB-8);
+  let g = '';
+  for (let v = 0; v <= top; v += top/2){ g += `<line class="grid" x1="${padL}" x2="${W}" y1="${y(v)}" y2="${y(v)}"/><text x="${padL-6}" y="${y(v)+3}" text-anchor="end">${Math.round(v)}</text>`; }
+  let bars = '', maxI = per.indexOf(Math.max(...per));
+  per.forEach((v,i) => {
+    const x = padL + i*cw + (cw-bw)/2;
+    if (v > 0) bars += `<rect class="bar" x="${x}" y="${y(v)}" width="${bw}" height="${(H-padB)-y(v)}" rx="${bw/2}"><title>${new Date(from+i*DAY).toLocaleDateString('ru-RU',{day:'numeric',month:'short'})}: ${Math.round(v)} мин</title></rect>`;
+    else bars += `<rect class="zero" x="${x}" y="${H-padB-3}" width="${bw}" height="3" rx="1.5"/>`;
+    if (i % 7 === (N-1) % 7) bars += `<text x="${x+bw/2}" y="${H-3}" text-anchor="middle">${new Date(from+i*DAY).toLocaleDateString('ru-RU',{day:'numeric',month:'short'}).replace('.','')}</text>`;
+  });
+  if (per[maxI] > 0){ const x = padL + maxI*cw + cw/2; bars += `<text class="lbl" x="${x}" y="${y(per[maxI])-5}" text-anchor="middle">${Math.round(per[maxI])}</text>`; }
+  return `<div class="chart"><div class="hd"><b>Последние 30 дней</b><span class="mini">${visits} ${plural(visits,'день','дня','дней')} в зале · ${dur(total*6e4)}</span></div>
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Минуты тренировок по дням за 30 дней">${g}${bars}</svg>
+    <div class="mini" style="margin-top:2px">минуты в день</div></div>`;
+}
+
+function sessionView(){
+  const a = W(), ed = view === 'edit';
+  const band = ed
+    ? `<div class="band"><div class="row"><span class="name">${esc(a.name)}</span><button class="x" data-editcancel>Отмена</button></div>
+       <div class="row"><span class="clock num" style="font-size:34px">${dayLabel(a.startedAt)}</span><button class="btn sm" data-editdone>Сохранить</button></div>
+       <div class="name num">${new Date(a.startedAt).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})} · ${dur(a.endedAt - a.startedAt)} · отметь сделанные подходы галочкой</div></div>`
+    : `<div class="band"><div class="row"><span class="name">${esc(a.name)}</span><button class="x" data-cancel>Отменить</button></div>
+    <div class="row"><span class="clock num" id="clock">0:00</span><button class="btn sm" data-finish>Завершить</button></div>
+    <div id="restWrap" style="min-height:24px"></div></div>`;
+  return band + `
+  ${a.exercises.map((e,ei)=>{ const prev = lastFor(e.name);
+    return `<div class="ex"><div class="h"><div><b>${esc(e.name)}</b>${prevLine(e.name)}</div><button class="icon" data-rmex="${ei}" aria-label="Убрать упражнение">Убрать</button></div>
+      <div class="sets"><span class="hdr" style="text-align:center">№</span><span class="hdr">Вес, кг</span><span class="hdr">Повторы</span><span></span>
+      ${e.sets.map((x,si)=>{ const ph = prev && prev[si] ? prev[si] : (prev && prev[prev.length-1]) || {};
+        return `<div class="no">${si+1}</div>
+        <div class="${x.done?'done':''}"><input class="num" inputmode="decimal" aria-label="Вес, подход ${si+1}" data-f="w" data-e="${ei}" data-s="${si}" value="${esc(x.w)}" placeholder="${esc(ph.w ?? '')}"></div>
+        <div class="${x.done?'done':''}"><input class="num" inputmode="numeric" aria-label="Повторы, подход ${si+1}" data-f="r" data-e="${ei}" data-s="${si}" value="${esc(x.r)}" placeholder="${esc(ph.r ?? '')}"></div>
+        <button class="chk ${x.done?'on':''}" data-done="${ei}:${si}" aria-label="Подход ${si+1} сделан" aria-pressed="${!!x.done}">${CHECK}</button>`; }).join('')}
+      </div>
+      <div class="ft"><button class="ghost sm" data-addset="${ei}">+ Подход</button>${e.sets.length>1?`<button class="icon" data-rmset="${ei}">Убрать последний</button>`:''}</div></div>`; }).join('')}
+  <form class="addex" id="addEx"><input id="addExIn" placeholder="Добавить упражнение" aria-label="Название упражнения" autocomplete="off"><button class="btn sm">Добавить</button></form>`;
+}
+
+function prevLine(name){
+  const l = lastInfo(name), b = bestFor(name);
+  if (!l) return '<div class="prev">Первый раз: вес запомнится после тренировки</div>';
+  return `<div class="prev num">${shortDate(l.at)}: ${esc(setsText(l.sets))}${b ? ` · рекорд ${fmtW(+b.w)}×${esc(b.r||'—')}` : ''}</div>`;
+}
+function bindSession(){
+  document.querySelectorAll('.sets input').forEach(inp => {
+    inp.addEventListener('input', () => { W().exercises[+inp.dataset.e].sets[+inp.dataset.s][inp.dataset.f] = inp.value.replace(',', '.').replace(/[^\d.]/g,''); saveActiveSoon(); });
+    inp.addEventListener('blur', () => { if (inp.dataset.f==='w' && inp.value !== inp.value.replace(/[^\d.,]/g,'')) inp.value = W().exercises[+inp.dataset.e].sets[+inp.dataset.s].w; });
+  });
+  $('#addEx').addEventListener('submit', e => { e.preventDefault(); const v = $('#addExIn').value.trim(); if (!v) return; W().exercises.push({ name:v, sets:[{w:'',r:'',done:false}] }); saveActiveNow(); render(); });
+}
+
+/* ---------- live clock ---------- */
+function tick(){
+  if (!active) return;
+  const now = Date.now();
+  const c = $('#clock'); if (c) c.textContent = clock(now - active.startedAt);
+  const r = $('#resumeClock'); if (r) r.textContent = clock(now - active.startedAt);
+  const rw = $('#restWrap');
+  if (rw){ rw.innerHTML = active.lastSetAt && now - active.lastSetAt < 15*6e4 ? `<span class="rest num">Отдых ${clock(now - active.lastSetAt)}</span>` : ''; }
+}
+setInterval(tick, 1000);
+
+/* ---------- sessions ---------- */
+function startSession(tpl){
+  if (active){ view = 'session'; render(); toast('Сначала заверши текущую тренировку'); return; }
+  const exercises = (tpl ? tpl.exercises : []).map(e => {
+    const prev = lastFor(e.name);
+    const n = prev ? Math.max(1, prev.length) : (e.sets || 3);
+    return { name:e.name, sets: Array.from({length:n}, () => ({ w:'', r:'', done:false })) };
+  });
+  active = { id: uid('s_'), kind:'session', templateId: tpl ? tpl.id : null, name: tpl ? tpl.name : 'Свободная тренировка', startedAt: Date.now(), endedAt: null, exercises };
+  put(structuredClone(active));
+  view = 'session'; closeSheet(); render(); window.scrollTo(0,0);
+}
+function finishSheet(){
+  const a = active, ms = Date.now() - a.startedAt;
+  const ds = doneSets(a);
+  openSheet(`<h3>Завершить «${esc(a.name)}»?</h3>
+    <div class="stats3"><div><div class="v num">${dur(ms)}</div><div class="l">в зале</div></div><div><div class="v num">${ds}</div><div class="l">${plural(ds,'подход','подхода','подходов')}</div></div><div><div class="v num">${fmtW(tonnage(a))}</div><div class="l">кг поднято</div></div></div>
+    ${ds ? '' : '<p class="mini" style="margin:0">Ни один подход не отмечен галочкой. Тренировка сохранится только со временем.</p>'}
+    ${a.templateId && hasNewExercises() ? `<label class="mini" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="updTpl" checked> Добавить новые упражнения в шаблон</label>` : ''}
+    <div class="actions"><button class="btn" data-finish-yes>Сохранить тренировку</button><button class="ghost" data-close>Ещё не всё</button></div>`);
+}
+function hasNewExercises(){ const t = docs.find(d=>d.id===active.templateId); if (!t) return false; const names = new Set(t.exercises.map(e=>e.name.toLowerCase())); return active.exercises.some(e=>!names.has(e.name.toLowerCase())); }
+async function finish(){
+  const upd = $('#updTpl') && $('#updTpl').checked;
+  const a = { ...structuredClone(active), endedAt: Date.now() };
+  a.exercises = a.exercises.map(e => ({ ...e, sets: e.sets.filter(x => x.done || x.w || x.r) })).filter(e => e.sets.length);
+  if (upd){ const t = structuredClone(docs.find(d=>d.id===active.templateId)); const names = new Set(t.exercises.map(e=>e.name.toLowerCase())); active.exercises.forEach(e=>{ if (!names.has(e.name.toLowerCase())) t.exercises.push({ name:e.name }); }); put(t); }
+  clearTimeout(saveT); active = null; closeSheet();
+  await put(a);
+  view = 'history'; render(); toast(`Готово: ${dur(a.endedAt - a.startedAt)}`);
+}
+
+/* ---------- templates ---------- */
+let tdraft = null;
+function tplSheet(id){
+  const t = id ? docs.find(d=>d.id===id) : null;
+  tdraft = t ? structuredClone(t) : { id: uid('t_'), kind:'template', name:'', exercises:[], order: Date.now() };
+  drawTpl(!!t);
+}
+function exMemo(name){
+  const l = lastInfo(name), b = bestFor(name);
+  if (!l) return '<small class="memo">ещё не делала</small>';
+  return `<small class="memo num">${shortDate(l.at)}: ${esc(setsText(l.sets))}</small>` + (b ? `<small class="memo pr num">Рекорд ${fmtW(+b.w)} кг × ${esc(b.r||'—')}</small>` : '');
+}
+function drawTpl(existing){
+  const d = tdraft;
+  openSheet(`<h3>${existing ? 'Тренировка' : 'Новая тренировка'}</h3>
+    <div class="field"><label for="tName">Название</label><input id="tName" value="${esc(d.name)}" placeholder="Например, Ноги и ягодицы"></div>
+    <div class="field"><span class="flab">Упражнения</span><div class="exl">${d.exercises.map((e,i)=>`<div class="exi"><span>${esc(e.name)}${exMemo(e.name)}</span>
+      <button class="icon" data-up="${i}" aria-label="Выше" ${i?'':'disabled'}>↑</button><button class="icon" data-rm="${i}" aria-label="Удалить">✕</button></div>`).join('') || '<span class="mini">Пока пусто</span>'}</div></div>
+    <form class="addex" id="tAdd"><input id="tAddIn" placeholder="Присед со штангой" aria-label="Новое упражнение" autocomplete="off"><button class="btn sm">Добавить</button></form>
+    <div class="actions">${existing ? `<button class="btn" data-start="${d.id}">Начать тренировку</button><button class="ghost" data-savetpl>Сохранить изменения</button>` : `<button class="btn" data-savetpl>Сохранить</button>`}
+    ${existing ? `<button class="link danger" data-deltpl="${d.id}">Удалить тренировку</button>` : `<button class="link" data-close>Отмена</button>`}</div>`);
+  $('#tName').addEventListener('input', e => { d.name = e.target.value; });
+  $('#tAdd').addEventListener('submit', e => { e.preventDefault(); const v = $('#tAddIn').value.trim(); if (!v) return; d.exercises.push({ name:v }); drawTpl(existing); $('#tAddIn').focus(); });
+}
+async function saveTpl(andStart){
+  const d = tdraft; d.name = ($('#tName')?.value || d.name).trim();
+  if (!d.name){ toast('Дай тренировке название'); $('#tName').focus(); return null; }
+  await put(structuredClone(d)); return d;
+}
+async function demo(){
+  const now = Date.now();
+  const list = [
+    ['Ноги и ягодицы', ['Присед со штангой','Румынская тяга','Выпады с гантелями','Ягодичный мост','Разгибание ног в тренажёре']],
+    ['Верх тела', ['Жим гантелей лёжа','Тяга верхнего блока','Тяга гантели в наклоне','Жим гантелей сидя','Разводка в стороны']],
+    ['Кор и кардио', ['Планка','Скручивания на блоке','Подъём ног в висе','Дорожка в горку']]
+  ];
+  for (const [i,[name,ex]] of list.entries()) await put({ id: uid('t_'), kind:'template', name, exercises: ex.map(n=>({name:n})), order: now + i });
+  render(); toast('Добавила 3 тренировки. Их можно менять под себя');
+}
+
+/* ---------- past workouts ---------- */
+let pdraft = null;
+function pastSheet(id){
+  const s = id ? docs.find(d=>d.id===id) : null;
+  const y = new Date(Date.now() - DAY); y.setHours(19,0,0,0);
+  const st = s ? new Date(s.startedAt) : y;
+  pdraft = { id, templateId: s ? s.templateId : (templates()[0]?.id || null), name: s ? s.name : '', mins: s ? Math.round((s.endedAt - s.startedAt)/6e4) : 60, sets: !s };
+  const pad = n => String(n).padStart(2,'0');
+  const dateVal = `${st.getFullYear()}-${pad(st.getMonth()+1)}-${pad(st.getDate())}`, timeVal = `${pad(st.getHours())}:${pad(st.getMinutes())}`;
+  const ts = templates();
+  openSheet(`<h3>${s ? 'Дата и время' : 'Прошедшая тренировка'}</h3>
+    ${s ? '' : `<div class="field"><span class="flab">Какая</span><div class="chips" id="pTpl">${ts.map(t=>`<button type="button" class="ghost sm" data-ptpl="${t.id}" aria-pressed="${pdraft.templateId===t.id}">${esc(t.name)}</button>`).join('')}<button type="button" class="ghost sm" data-ptpl="" aria-pressed="${!pdraft.templateId}">Другая</button></div></div>
+    <div class="field" id="pNameF" style="${pdraft.templateId?'display:none':''}"><label for="pName">Название</label><input id="pName" placeholder="Например, Бассейн или Растяжка"></div>`}
+    <div class="two" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="field"><label for="pDate">День</label><input id="pDate" type="date" value="${dateVal}" max="${new Date().toISOString().slice(0,10)}"></div>
+      <div class="field"><label for="pTime">Начало</label><input id="pTime" type="time" value="${timeVal}"></div></div>
+    <div class="field"><span class="flab">Сколько длилась</span><div class="chips" id="pDur">${[30,45,60,75,90,120].map(m=>`<button type="button" class="ghost sm" data-pdur="${m}" aria-pressed="${pdraft.mins===m}">${m<60?m+' мин':(m%60?Math.floor(m/60)+' ч '+m%60:m/60+' ч')}</button>`).join('')}</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:6px"><input id="pMins" class="num" inputmode="numeric" aria-label="Длительность в минутах" value="${pdraft.mins}" style="width:96px"><span class="mini">минут, или выбери выше</span></div></div>
+    ${s ? '' : `<label class="mini" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="pSets" checked> Записать подходы</label>`}
+    <div class="actions"><button class="btn" data-pastsave>${s ? 'Сохранить' : 'Дальше'}</button><button class="link" data-close>Отмена</button></div>`);
+}
+async function pastSave(){
+  const d = pdraft;
+  const date = $('#pDate').value, time = $('#pTime').value || '19:00';
+  const mins = parseInt($('#pMins').value, 10);
+  if (!date){ toast('Выбери день'); return; }
+  if (!(mins > 0) || mins > 600){ toast('Укажи длительность в минутах, от 1 до 600'); $('#pMins').focus(); return; }
+  const [Y,M,D] = date.split('-').map(Number), [h,m] = time.split(':').map(Number);
+  const startedAt = new Date(Y, M-1, D, h, m).getTime();
+  if (startedAt > Date.now()){ toast('Это время ещё не наступило'); return; }
+  if (d.id){ const s = structuredClone(docs.find(x=>x.id===d.id)); s.startedAt = startedAt; s.endedAt = startedAt + mins*6e4; closeSheet(); await put(s); render(); toast('Время обновлено'); return; }
+  const tpl = d.templateId ? docs.find(x=>x.id===d.templateId) : null;
+  const name = tpl ? tpl.name : ($('#pName').value.trim() || 'Тренировка');
+  const sess = { id: uid('s_'), kind:'session', templateId: tpl ? tpl.id : null, name, startedAt, endedAt: startedAt + mins*6e4, manual:true, exercises: [] };
+  closeSheet();
+  if ($('#pSets') && $('#pSets').checked){
+    editing = sess; editing.isNew = true; view = 'edit';
+    editing.exercises = (tpl ? tpl.exercises : []).map(e => { const prev = lastFor(e.name); return { name:e.name, sets: Array.from({length: prev ? Math.max(1, prev.length) : 3}, () => ({ w:'', r:'', done:false })) }; });
+    render(); window.scrollTo(0,0);
+  } else { await put(sess); view = 'history'; render(); toast(`Добавлено: ${dayLabel(startedAt).toLowerCase()}, ${dur(mins*6e4)}`); }
+}
+async function editDone(){
+  const e = structuredClone(editing); delete e.isNew;
+  e.exercises = e.exercises.map(x => ({ ...x, sets: x.sets.filter(y => y.done || y.w || y.r) })).filter(x => x.sets.length);
+  editing = null; view = 'history';
+  await put(e); render(); toast('Тренировка сохранена');
+}
+
+/* ---------- session detail ---------- */
+function sessSheet(id){
+  const s = docs.find(d=>d.id===id); if (!s) return;
+  openSheet(`<h3>${esc(s.name)}</h3><div class="mini">${new Date(s.startedAt).toLocaleDateString('ru-RU',{weekday:'long', day:'numeric', month:'long'})}, ${new Date(s.startedAt).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}–${new Date(s.endedAt).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}</div>
+    <div class="stats3"><div><div class="v num">${dur(s.endedAt-s.startedAt)}</div><div class="l">в зале</div></div><div><div class="v num">${doneSets(s)}</div><div class="l">${plural(doneSets(s),'подход','подхода','подходов')}</div></div><div><div class="v num">${fmtW(tonnage(s))}</div><div class="l">кг поднято</div></div></div>
+    <div class="log">${s.exercises.map(e=>`<div><b>${esc(e.name)}</b><span class="num">${esc(setsText(e.sets.filter(x=>x.done).length ? e.sets.filter(x=>x.done) : e.sets))}</span></div>`).join('') || '<span class="mini">Подходы не записаны</span>'}</div>
+    <div class="actions"><button class="ghost" data-editsess="${s.id}">Изменить подходы</button><button class="ghost" data-edittime="${s.id}">Изменить дату и время</button><button class="link danger" data-delsess="${s.id}">Удалить тренировку</button></div>`);
+}
+
+/* ---------- sheet + toast ---------- */
+function openSheet(html){ $('#sheet').innerHTML = '<div class="grab"></div>' + html; $('#scrim').classList.add('on'); }
+function closeSheet(){ $('#scrim').classList.remove('on'); }
+$('#scrim').addEventListener('click', e => { if (e.target.id === 'scrim') closeSheet(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSheet(); });
+let tt; function toast(m){ const t = $('#toast'); t.textContent = m; t.classList.add('on'); clearTimeout(tt); tt = setTimeout(()=>t.classList.remove('on'), 3000); }
+
+/* ---------- clicks ---------- */
+document.addEventListener('click', async e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const ds = b.dataset;
+  if (ds.view){ view = ds.view; render(); }
+  else if ('newtpl' in ds) tplSheet(null);
+  else if ('demo' in ds) demo();
+  else if (ds.tpl) tplSheet(ds.tpl);
+  else if ('free' in ds) startSession(null);
+  else if ('resume' in ds){ view = 'session'; render(); window.scrollTo(0,0); }
+  else if ('savetpl' in ds){ if (await saveTpl()){ closeSheet(); render(); } }
+  else if (ds.start){ const t = await saveTpl(); if (t) startSession(t); }
+  else if (ds.up){ const i = +ds.up, x = tdraft.exercises; [x[i-1], x[i]] = [x[i], x[i-1]]; tdraft.name = $('#tName').value; drawTpl(docs.some(d=>d.id===tdraft.id)); }
+  else if (ds.rm){ tdraft.exercises.splice(+ds.rm, 1); tdraft.name = $('#tName').value; drawTpl(docs.some(d=>d.id===tdraft.id)); }
+  else if (ds.deltpl){ openSheet(`<h3>Удалить «${esc(tdraft.name)}»?</h3><p class="mini" style="margin:0">Прошлые тренировки в истории останутся.</p><div class="actions"><button class="btn" data-deltpl-yes="${ds.deltpl}">Удалить</button><button class="ghost" data-close>Оставить</button></div>`); }
+  else if (ds.deltplYes){ closeSheet(); await del(ds.deltplYes); render(); }
+  else if ('close' in ds) closeSheet();
+  else if (ds.done){ const [ei, si] = ds.done.split(':').map(Number); const x = W().exercises[ei].sets[si];
+    if (!x.done){ const inps = document.querySelectorAll(`[data-e="${ei}"][data-s="${si}"]`); inps.forEach(i => { if (!x[i.dataset.f] && i.placeholder) x[i.dataset.f] = i.placeholder.replace(',', '.').replace(/[^\d.]/g,''); }); if (view !== 'edit') active.lastSetAt = Date.now(); }
+    x.done = !x.done;
+    if (x.done && +x.w){ const b = bestFor(W().exercises[ei].name); if (b && +x.w > +b.w) toast(`Новый рекорд: ${fmtW(+x.w)} кг! Было ${fmtW(+b.w)}`); }
+    saveActiveNow(); render(); }
+  else if (ds.addset){ const s = W().exercises[+ds.addset].sets; const l = s[s.length-1] || {}; s.push({ w:l.w||'', r:l.r||'', done:false }); saveActiveNow(); render(); }
+  else if (ds.rmset){ W().exercises[+ds.rmset].sets.pop(); saveActiveNow(); render(); }
+  else if (ds.rmex){ W().exercises.splice(+ds.rmex, 1); saveActiveNow(); render(); }
+  else if ('finish' in ds) finishSheet();
+  else if ('finishYes' in ds) finish();
+  else if ('cancel' in ds){ openSheet(`<h3>Отменить тренировку?</h3><p class="mini" style="margin:0">Время и подходы этой тренировки не сохранятся.</p><div class="actions"><button class="btn" data-cancel-yes>Да, отменить</button><button class="ghost" data-close>Продолжить</button></div>`); }
+  else if ('cancelYes' in ds){ const id = active.id; clearTimeout(saveT); active = null; closeSheet(); view = 'home'; await del(id); render(); }
+  else if (ds.sess) sessSheet(ds.sess);
+  else if ('past' in ds) pastSheet(null);
+  else if (ds.ptpl !== undefined){ pdraft.templateId = ds.ptpl || null; document.querySelectorAll('[data-ptpl]').forEach(x=>x.setAttribute('aria-pressed', x===b)); $('#pNameF').style.display = pdraft.templateId ? 'none' : ''; }
+  else if (ds.pdur){ $('#pMins').value = ds.pdur; document.querySelectorAll('[data-pdur]').forEach(x=>x.setAttribute('aria-pressed', x===b)); }
+  else if ('pastsave' in ds) pastSave();
+  else if (ds.edittime) pastSheet(ds.edittime);
+  else if (ds.editsess){ editing = structuredClone(docs.find(d=>d.id===ds.editsess)); if (!editing.exercises.length && editing.templateId){ const t = docs.find(d=>d.id===editing.templateId); if (t) editing.exercises = t.exercises.map(e=>({ name:e.name, sets:[{w:'',r:'',done:false},{w:'',r:'',done:false},{w:'',r:'',done:false}] })); }
+    closeSheet(); view = 'edit'; render(); window.scrollTo(0,0); }
+  else if ('editdone' in ds) editDone();
+  else if ('editcancel' in ds){ editing = null; view = 'history'; render(); }
+  else if (ds.delsess){ openSheet(`<h3>Удалить эту тренировку из истории?</h3><div class="actions"><button class="btn" data-delsess-yes="${ds.delsess}">Удалить</button><button class="ghost" data-close>Оставить</button></div>`); }
+  else if (ds.delsessYes){ closeSheet(); await del(ds.delsessYes); render(); }
+});
+
+init();
+})();
+</script>
+</body>
+</html>
