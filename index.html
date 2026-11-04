@@ -4,6 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Подход — дневник зала</title>
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Подход">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#F3F4F6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0B0B0D" media="(prefers-color-scheme: dark)">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -35,7 +43,10 @@ button,input{font:inherit;color:inherit}
 h1{font:800 28px/1 var(--font);letter-spacing:-.03em;margin:0}
 h2{font:600 13px/1 var(--font);color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:0}
 .top{display:flex;align-items:center;justify-content:space-between;gap:12px}
-.sync{font-size:12px;color:var(--muted);white-space:nowrap}
+.sync{white-space:nowrap}
+.brand{display:flex;align-items:stretch;gap:14px;min-width:0}
+.appicon{align-self:stretch;width:56px;flex:none;border-radius:22%;background:#ff3b00 url("icon-192.png") center/cover no-repeat}
+.tagline{font-size:13px;color:var(--muted);margin-top:6px}
 
 .btn{border:0;border-radius:999px;padding:13px 20px;font-weight:600;cursor:pointer;background:var(--ink);color:var(--bg);white-space:nowrap}
 .btn.sm{padding:9px 14px;font-size:14px}
@@ -264,7 +275,8 @@ function render(){
   if (view === 'edit') view = 'history';
   if (view === 'session') view = 'home';
   const tabs = `<div class="seg" role="group" aria-label="Раздел"><button data-view="home" aria-pressed="${view==='home'}">Тренировки</button><button data-view="history" aria-pressed="${view==='history'}">История</button></div>`;
-  app.innerHTML = `<div class="top"><h1>Подход</h1><span class="sync" id="sync">${esc(syncText)}</span></div>${tabs}` + (view === 'history' ? historyView() : homeView());
+  app.innerHTML = `<div class="brand"><span class="appicon" aria-hidden="true"></span><div class="btext"><h1>Подход</h1><div class="tagline">дневник зала · <span class="sync" id="sync">${esc(syncText)}</span></div></div></div>${tabs}` + (view === 'history' ? historyView() : homeView());
+  fitIcon();
 }
 
 function homeView(){
@@ -376,6 +388,13 @@ function bindSession(){
   $('#addEx').addEventListener('submit', e => { e.preventDefault(); const v = $('#addExIn').value.trim(); if (!v) return; W().exercises.push({ name:v, sets:[{w:'',r:'',done:false}] }); saveActiveNow(); render(); });
 }
 
+/* header icon: square, as tall as the title + tagline block */
+let iconObs = null;
+function fitIcon(){
+  const ic = document.querySelector('.appicon'), tb = document.querySelector('.btext'); if (!ic || !tb) return;
+  const fit = () => { ic.style.width = tb.offsetHeight + 'px'; };
+  fit(); if (window.ResizeObserver){ if (iconObs) iconObs.disconnect(); iconObs = new ResizeObserver(fit); iconObs.observe(tb); }
+}
 /* ---------- live clock ---------- */
 function tick(){
   if (!active) return;
