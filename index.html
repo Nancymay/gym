@@ -125,6 +125,7 @@ h2{font:600 13px/1 var(--font);color:var(--muted);text-transform:uppercase;lette
 .chk.on{background:var(--ink);border-color:var(--ink)}
 .chk.on svg{stroke:var(--bg)}
 .sets .done input{background:var(--soft);border-color:transparent}
+.sets div:not(.done) input:not(:focus){color:var(--muted)}
 .ex .ft{display:flex;gap:8px;justify-content:space-between;align-items:center}
 .icon{background:none;border:0;cursor:pointer;color:var(--muted);padding:6px;font-size:13px}
 .addex{display:flex;gap:8px}
@@ -263,6 +264,12 @@ function bestFor(name){
   return best;
 }
 const shortDate = t => new Date(t).toLocaleDateString('ru-RU',{day:'numeric',month:'short'}).replace('.','');
+// sets for a new workout: last time's weights and reps, not yet ticked
+function prefillSets(name, fallback = 3){
+  const prev = lastFor(name);
+  if (!prev || !prev.length) return Array.from({length:fallback}, () => ({ w:'', r:'', done:false }));
+  return prev.map(x => ({ w: x.w || '', r: x.r || '', done:false }));
+}
 const setsText = sets => sets.map(x => (x.w ? fmtW(+x.w) + '×' : '') + (x.r || '—')).join(', ');
 const tonnage = s => s.exercises.reduce((a,e)=>a+e.sets.filter(x=>x.done).reduce((b,x)=>b+(+x.w||0)*(+x.r||0),0),0);
 const doneSets = s => s.exercises.reduce((a,e)=>a+e.sets.filter(x=>x.done).length,0);
@@ -385,7 +392,7 @@ function bindSession(){
     inp.addEventListener('input', () => { W().exercises[+inp.dataset.e].sets[+inp.dataset.s][inp.dataset.f] = inp.value.replace(',', '.').replace(/[^\d.]/g,''); saveActiveSoon(); });
     inp.addEventListener('blur', () => { if (inp.dataset.f==='w' && inp.value !== inp.value.replace(/[^\d.,]/g,'')) inp.value = W().exercises[+inp.dataset.e].sets[+inp.dataset.s].w; });
   });
-  $('#addEx').addEventListener('submit', e => { e.preventDefault(); const v = $('#addExIn').value.trim(); if (!v) return; W().exercises.push({ name:v, sets:[{w:'',r:'',done:false}] }); saveActiveNow(); render(); });
+  $('#addEx').addEventListener('submit', e => { e.preventDefault(); const v = $('#addExIn').value.trim(); if (!v) return; W().exercises.push({ name:v, sets: prefillSets(v, 1) }); saveActiveNow(); render(); });
 }
 
 /* header icon: square, as tall as the title + tagline block */
@@ -409,11 +416,7 @@ setInterval(tick, 1000);
 /* ---------- sessions ---------- */
 function startSession(tpl){
   if (active){ view = 'session'; render(); toast('Сначала заверши текущую тренировку'); return; }
-  const exercises = (tpl ? tpl.exercises : []).map(e => {
-    const prev = lastFor(e.name);
-    const n = prev ? Math.max(1, prev.length) : (e.sets || 3);
-    return { name:e.name, sets: Array.from({length:n}, () => ({ w:'', r:'', done:false })) };
-  });
+  const exercises = (tpl ? tpl.exercises : []).map(e => ({ name:e.name, sets: prefillSets(e.name, e.sets || 3) }));
   active = { id: uid('s_'), kind:'session', templateId: tpl ? tpl.id : null, name: tpl ? tpl.name : 'Свободная тренировка', startedAt: Date.now(), endedAt: null, exercises };
   put(structuredClone(active));
   view = 'session'; closeSheet(); render(); window.scrollTo(0,0);
@@ -515,7 +518,7 @@ async function pastSave(){
   closeSheet();
   if ($('#pSets') && $('#pSets').checked){
     editing = sess; editing.isNew = true; view = 'edit';
-    editing.exercises = (tpl ? tpl.exercises : []).map(e => { const prev = lastFor(e.name); return { name:e.name, sets: Array.from({length: prev ? Math.max(1, prev.length) : 3}, () => ({ w:'', r:'', done:false })) }; });
+    editing.exercises = (tpl ? tpl.exercises : []).map(e => ({ name:e.name, sets: prefillSets(e.name) }));
     render(); window.scrollTo(0,0);
   } else { await put(sess); view = 'history'; render(); toast(`Добавлено: ${dayLabel(startedAt).toLowerCase()}, ${dur(mins*6e4)}`); }
 }
@@ -577,7 +580,7 @@ document.addEventListener('click', async e => {
   else if (ds.pdur){ $('#pMins').value = ds.pdur; document.querySelectorAll('[data-pdur]').forEach(x=>x.setAttribute('aria-pressed', x===b)); }
   else if ('pastsave' in ds) pastSave();
   else if (ds.edittime) pastSheet(ds.edittime);
-  else if (ds.editsess){ editing = structuredClone(docs.find(d=>d.id===ds.editsess)); if (!editing.exercises.length && editing.templateId){ const t = docs.find(d=>d.id===editing.templateId); if (t) editing.exercises = t.exercises.map(e=>({ name:e.name, sets:[{w:'',r:'',done:false},{w:'',r:'',done:false},{w:'',r:'',done:false}] })); }
+  else if (ds.editsess){ editing = structuredClone(docs.find(d=>d.id===ds.editsess)); if (!editing.exercises.length && editing.templateId){ const t = docs.find(d=>d.id===editing.templateId); closeSheet(); view = 'edit'; if (t) editing.exercises = t.exercises.map(e=>({ name:e.name, sets: prefillSets(e.name) })); }
     closeSheet(); view = 'edit'; render(); window.scrollTo(0,0); }
   else if ('editdone' in ds) editDone();
   else if ('editcancel' in ds){ editing = null; view = 'history'; render(); }
